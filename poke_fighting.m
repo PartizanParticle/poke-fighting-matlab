@@ -13,7 +13,7 @@
 % Variables
 width = 600;
 height = 600;
-tw = 4;
+tw = 10;
 HP_buff = 20;
 ATK_buff = 10;
 DEF_buff = 5;
@@ -79,12 +79,7 @@ clear totstat max_stat
 type1 = floor(rand(width/tw, height/tw)*18);
 type2 = floor(rand(width/tw, height/tw)*18).*(rand(width/tw, height/tw)<=0.25);
 
-for iter = 1:10
-    figure(1)
-    image(1:width/tw, 1:height/tw, type1)
-    colormap(cmap)
-    set(gca,'visible','off');
-    truesize(figure(1),[width, height])
+for iter = 1:40
     
     
     % Lengthy comparisons coming up...
@@ -245,30 +240,41 @@ for iter = 1:10
     
     %% Write out to gif and draw
     % frame rate is set to 60fps currently
+    
+    % Draw graph
     figure(1)
+    clf(figure(1))
+    
+    subplot(1,2,1)
+    image(1:width/tw, 1:height/tw, type1)
+    colormap(cmap)
+    set(gca,'visible','off');
+    
+    data = histcounts(type1(:), length(cmap));
+    subplot(1,2,2)
+    hold on
+    for d = 1:length(data)
+        bar(d, data(d), 'FaceColor', cmap(d,:))
+    end
+    hold off
+    
+    truesize(figure(1), [width height])
     drawnow()
     
-
+    % gif writing
     % straight outta documentation
-
+    %{
     frame = getframe(1);
     im = frame2im(frame);
     [A, map] = rgb2ind(im, cmap);
     if iter == 1
-       imwrite(A, map, file_nm, 'gif', 'LoopCount', Inf, 'DelayTime', 1/60);
+        imwrite(A, map, file_nm, 'gif', 'LoopCount', Inf, 'DelayTime', 1/60);
     else
         imwrite(A,map,file_nm,'gif','WriteMode','append','DelayTime',1/60);
     end
-
-    
+    %}
     
 end
 
-
-% If neighbouring pixels are the same colour then leave the
-% Expand through the arrays from there
-
-%image([1:200], [1:200], stat])
-%colormap([regional definitions])
 
 
