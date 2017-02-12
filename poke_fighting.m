@@ -6,24 +6,19 @@
 %   - Distribute pokemon stats in an array
 %   - Loop over arrays, making logic decisions and drawing
 
-%% Current flaws/things to work on: 
-% 
-%   - The fastest pokemon hits the other, that is the end of the round
-%       quite possible some pokemon will just get whaled on and never
-%       get a chance to attack anyone, no 'call and response' battling
-%   - ATK and DEF are constant always right now
-%   - How do we deal with pokemon becoming large blobs?
-%       Currently the large blobs never get BETTER stats, they just get
-%       multiple clones of themselves over the course of ages
-%   - Types are not used in battle apart from "friend or foe"
-%   - In simulation there are small island dots that never change
-%       Need to debug this area of code
-%
-
+%% Current flaws/things to work on:
+%   - None
 %% Code
+
+% Variables
 width = 600;
 height = 600;
-tw = 3;
+tw = 4;
+HP_buff = 20;
+ATK_buff = 10;
+DEF_buff = 5;
+
+file_nm = 'simulation.gif';
 
 %{
 types = ['Normal'; 'Fire'; 'Water'; 'Electric'; 'Grass'; 'Ice'; ...
@@ -56,132 +51,216 @@ cmap = 1/255.*[200,200,200;     % Normal
 % Each pixel will have stats and this multitude of arrays
 % can be viewed to be the 'class'
 
-attack = zeros(width/tw, height/tw);
-defense = zeros(width/tw, height/tw);
-health = zeros(width/tw, height/tw);
-speed = zeros(width/tw, height/tw);
+ATK = zeros(width/tw, height/tw);
+DEF = zeros(width/tw, height/tw);
+HP = zeros(width/tw, height/tw);
+SPD = zeros(width/tw, height/tw);
 type1 = zeros(width/tw, height/tw);
 type2 = zeros(width/tw, height/tw);
 micromon = zeros(width/tw, height/tw);
 
 % This is then split between HP, SPD, DEF and ATK
 max_stat = 255;
-totstat = ones(width/tw, height/tw)*max_stat; 
+totstat = ones(width/tw, height/tw)*max_stat;
 
 % Construct the micromon's stats
-health = 100 + floor(rand(width/tw, height/tw).*totstat);
-totstat = totstat - health + 100;
-attack = floor(rand(width/tw, height/tw).*totstat);
-totstat = totstat - attack;
-defense = floor(rand(width/tw, height/tw).*totstat);
-totstat = totstat - defense;
-speed = totstat;
+HP = 100 + floor(rand(width/tw, height/tw).*totstat);
+totstat = totstat - HP + 100;
+ATK = floor(rand(width/tw, height/tw).*totstat);
+totstat = totstat - ATK;
+DEF = floor(rand(width/tw, height/tw).*totstat);
+totstat = totstat - DEF;
+SPD = totstat;
 
-clear totstat max_stat 
+clear totstat max_stat
 % Construct the type system, using /u/Morning_Fresh logic
 % Type 2 is non zero every 25%
 % Type 1 is one of 18 types: [0, 17]
 type1 = floor(rand(width/tw, height/tw)*18);
 type2 = floor(rand(width/tw, height/tw)*18).*(rand(width/tw, height/tw)<=0.25);
 
-for iter = 1:2000
+for iter = 1:10
+    figure(1)
     image(1:width/tw, 1:height/tw, type1)
     colormap(cmap)
+    set(gca,'visible','off');
+    truesize(figure(1),[width, height])
+    
     
     % Lengthy comparisons coming up...
     
     %% Fighting
-    % Iterate through grid and compare to neighbours as we go
+    % Iterate through all pokemon in rand order and compare to neighbours
     % There are neighbours above, below, left and right. No diagonals
     % To minimise bias we randomly select which SINGULAR pokemon to fight
     fight = floor(rand(width/tw, height/tw)*4);
-    for i = 1:width/tw
-        for j = 1:height/tw
+    for i = randperm(width/tw)
+        for j = randperm(height/tw)
             % Map the directions clockwise:
             % 0 = above, 1 = right, 2 = below, 3 = left
-            if (fight(i,j) == 0)||(fight(i,j) == 2)
+            if (fight(i,j) == 0) || (fight(i,j) == 2)
                 % Subtract 1 from fight[i,j] to get above/below modifier
-                movement = j + fight(i,j) - 1;
-                if (1 <= movement && movement <= height/tw)
-                   % Pokemon has a neighbour to fight?
-                   if type1(i,j) == type1(i,movement)
-                       continue
-                   % Quickest pokemon attacks IF they can
-                   elseif speed(i,j) > speed(i, movement) && ...
-                           defense(i, movement) < attack(i,j)
-                       health(i, movement) = health(i, movement) - attack(i,j);
-                   elseif speed(i,j) < speed(i, movement) && ...
-                           defense(i, j) < attack(i,movement)
-                       health(i, j) = health(i, j) - attack(i,movement);
-                   end
-                   
-                   % Absorb the opponents stats if opponent died
-                   % Stats are the same between two pixels, like pokemon
-                   % 'grew' from this battle
-                   if health(i,j) < 0
-                      speed(i,j) = speed(i, movement);
-                      health(i,j) = health(i, movement);
-                      attack(i,j) = attack(i, movement);
-                      defense(i,j) = defense(i,movement);
-                      type1(i,j) = type1(i, movement);
-                      type2(i,j) = type2(i, movement);
-                   elseif health(i, movement) < 0
-                      speed(i, movement) = speed(i,j);
-                      health(i, movement) = health(i,j);
-                      attack(i, movement) = attack(i,j); 
-                      defense(i,movement) = defense(i,j);
-                      type1(i, movement) = type1(i,j); 
-                      type2(i, movement) = type2(i,j);
-                   end
-                   
+                enmy = j + fight(i,j) - 1;
+                if (1 <= enmy && enmy <= height/tw)
+                    % Pokemon has a neighbour to fight?
+                    if type1(i,j) == type1(i,enmy)
+                        continue
+                        % Quickest pokemon ATKs first
+                    elseif SPD(i,j) > SPD(i, enmy)
+                        dmg_mult = max(getEff(type1(i,j), type1(i, enmy)), ...
+                            getEff(type2(i,j), type1(i, enmy)));
+                        
+                        dmg_enmy = (ATK(i,j) - DEF(i, enmy)).*dmg_mult;
+                        HP(i, enmy) = HP(i, enmy) - dmg_enmy.*(dmg_enmy>0);
+                        
+                        % Retaliate if possible
+                        if HP(i,enmy) > 0
+                            dmg_mult = max(getEff(type1(i,enmy), type1(i, j)), ...
+                                getEff(type2(i,enmy), type1(i, j)));
+                            
+                            dmg_acc = (ATK(i,enmy) - DEF(i, j)).*dmg_mult;
+                            HP(i, j) = HP(i, j) - dmg_acc.*(dmg_acc>0);
+                        end
+                    else
+                        dmg_mult = max(getEff(type1(i,enmy), type1(i, j)), ...
+                            getEff(type2(i,enmy), type1(i, j)));
+                        
+                        dmg_acc = (ATK(i,enmy) - DEF(i, j)).*dmg_mult;
+                        HP(i, j) = HP(i, j) - dmg_acc.*(dmg_acc>0);
+                        
+                        % Retaliate if possible
+                        if HP(i,j) > 0
+                            dmg_mult = max(getEff(type1(i,j), type1(i, enmy)), ...
+                                getEff(type2(i,j), type1(i, enmy)));
+                            
+                            dmg_enmy = (ATK(i,j) - DEF(i, enmy)).*dmg_mult;
+                            HP(i, enmy) = HP(i, enmy) - dmg_enmy.*(dmg_enmy>0);
+                        end
+                    end
+                    
+                    % Absorb the opponents stats if opponent died
+                    % Stats are the same between two pixels, no growth yet
+                    if HP(i,j) < 0
+                        % Buff up the winner
+                        HP(i, enmy) = HP(i, enmy) + HP_buff;
+                        ATK(i, enmy) = ATK(i, enmy) + ATK_buff;
+                        DEF(i, enmy) = DEF(i, enmy) + DEF_buff;
+                        
+                        SPD(i,j) = SPD(i, enmy);
+                        HP(i,j) = HP(i, enmy);
+                        ATK(i,j) = ATK(i, enmy);
+                        DEF(i,j) = DEF(i,enmy);
+                        type1(i,j) = type1(i, enmy);
+                        type2(i,j) = type2(i, enmy);
+                    elseif HP(i, enmy) < 0
+                        HP(i, j) = HP(i, j) + HP_buff;
+                        ATK(i, j) = ATK(i, j) + ATK_buff;
+                        DEF(i, j) = DEF(i, j) + DEF_buff;
+                        
+                        SPD(i, enmy) = SPD(i,j);
+                        HP(i, enmy) = HP(i,j);
+                        ATK(i, enmy) = ATK(i,j);
+                        DEF(i,enmy) = DEF(i,j);
+                        type1(i, enmy) = type1(i,j);
+                        type2(i, enmy) = type2(i,j);
+                    end
+                    
                 end
             else
                 % Subtract 2 from fight[i,j] to get L/R modifier
-                movement = i + fight(i,j) - 2;
-                if (1 <= movement && movement <= width/tw)
-                   % Pokemon has a neighbour to fight?
-                   if type1(i,j) == type1(movement,j)
-                       continue
-                   % Quickest pokemon attacks IF they can
-                   elseif speed(i,j) > speed(movement, j) && ...
-                           defense(movement, j) < attack(i,j)
-                       health(movement, j) = health(movement, j) - attack(i,j);
-                   elseif speed(i,j) < speed(movement, j) && ...
-                           defense(i, j) < attack(movement,j)
-                       health(i, j) = health(i, j) - attack(movement,j);
-                   end
-                   
-                   % Absorb the opponents stats if opponent died
-                   % Stats are the same between two pixels, like pokemon
-                   % 'grew' from this battle
-                   if health(i,j) < 0
-                      speed(i,j) = speed(movement, j);
-                      health(i,j) = health(movement, j);
-                      attack(i,j) = attack(movement, j);
-                      defense(i,j) = defense(movement,j);
-                      type1(i,j) = type1(movement, j);
-                      type2(i,j) = type2(movement, j);
-                   elseif health(movement, j) < 0
-                      speed(movement, j) = speed(i,j);
-                      health(movement, j) = health(i,j);
-                      attack(movement, j) = attack(i,j); 
-                      defense(movement,j) = defense(i,j);
-                      type1(movement, j) = type1(i,j); 
-                      type2(movement, j) = type2(i,j);
-                   end
-                   
+                enmy = i + fight(i,j) - 2;
+                if (1 <= enmy && enmy <= width/tw)
+                    % Pokemon has a neighbour to fight?
+                    if type1(i,j) == type1(enmy,j)
+                        continue
+                        % Quickest pokemon ATKs first
+                    elseif SPD(i,j) > SPD(enmy,j)
+                        dmg_mult = max(getEff(type1(i,j), type1(enmy, j)), ...
+                            getEff(type2(i,j), type1(enmy, j)));
+                        
+                        dmg_enmy = (ATK(i,j) - DEF(i, enmy)).*dmg_mult;
+                        HP(enmy,j) = HP(enmy,j) - dmg_enmy.*(dmg_enmy>0);
+                        
+                        % Retaliate if possible
+                        if HP(enmy,j) > 0
+                            dmg_mult = max(getEff(type1(enmy,j), type1(i, j)), ...
+                                getEff(type2(enmy,j), type1(i, j)));
+                            
+                            dmg_acc = (ATK(enmy,j) - DEF(i, j)).*dmg_mult;
+                            HP(i,j) = HP(i,j) - dmg_acc.*(dmg_acc>0);
+                        end
+                    else
+                        dmg_mult = max(getEff(type1(enmy,j), type1(i, j)), ...
+                            getEff(type2(enmy,j), type1(i, j)));
+                        
+                        dmg_acc = (ATK(enmy,j) - DEF(i, j)).*dmg_mult;
+                        HP(i,j) = HP(i,j) - dmg_acc.*(dmg_acc>0);
+                        
+                        % Retaliate if possible
+                        if HP(i,j) > 0
+                            dmg_mult = max(getEff(type1(i,j), type1(enmy, j)), ...
+                                getEff(type2(i,j), type1(enmy, j)));
+                            
+                            dmg_enmy = (ATK(i,j) - DEF(i, enmy)).*dmg_mult;
+                            HP(enmy,j) = HP(enmy,j) - dmg_enmy.*(dmg_enmy>0);
+                        end
+                    end
+                    
+                    % Absorb the opponents stats if opponent died
+                    % Stats are the same between two pixels, like pokemon
+                    % 'grew' from this battle
+                    if HP(i,j) < 0
+                        HP(enmy, j) = HP(enmy, j) + HP_buff;
+                        ATK(enmy, j) = ATK(enmy, j) + ATK_buff;
+                        DEF(enmy, j) = DEF(enmy, j) + DEF_buff;
+                        
+                        SPD(i,j) = SPD(enmy, j);
+                        HP(i,j) = HP(enmy, j);
+                        ATK(i,j) = ATK(enmy, j);
+                        DEF(i,j) = DEF(enmy,j);
+                        type1(i,j) = type1(enmy, j);
+                        type2(i,j) = type2(enmy, j);
+                    elseif HP(enmy, j) < 0
+                        HP(i, j) = HP(i, j) + HP_buff;
+                        ATK(i, j) = ATK(i, j) + ATK_buff;
+                        DEF(i, j) = DEF(i, j) + DEF_buff;
+                        
+                        SPD(enmy, j) = SPD(i,j);
+                        HP(enmy, j) = HP(i,j);
+                        ATK(enmy, j) = ATK(i,j);
+                        DEF(enmy,j) = DEF(i,j);
+                        type1(enmy, j) = type1(i,j);
+                        type2(enmy, j) = type2(i,j);
+                    end
+                    
                 end
             end
             
         end
     end
     
-    %% Consuming the dead and making them our own
+    %% Extensions
     % Could add an array of co-ordinates to keep track of where pokemon
     % are actively fighting, thus avoiding the middles of large pokemon
     
-    %% Screen delay so progression is visible
-    pause(0.0001)
+    %% Write out to gif and draw
+    % frame rate is set to 60fps currently
+    figure(1)
+    drawnow()
+    
+
+    % straight outta documentation
+
+    frame = getframe(1);
+    im = frame2im(frame);
+    [A, map] = rgb2ind(im, cmap);
+    if iter == 1
+       imwrite(A, map, file_nm, 'gif', 'LoopCount', Inf, 'DelayTime', 1/60);
+    else
+        imwrite(A,map,file_nm,'gif','WriteMode','append','DelayTime',1/60);
+    end
+
+    
     
 end
 
