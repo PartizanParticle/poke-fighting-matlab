@@ -13,7 +13,7 @@
 % Variables
 width = 600;
 height = 600;
-tw = 10;
+tw = 1;
 HP_buff = 20;
 ATK_buff = 10;
 DEF_buff = 5;
@@ -57,7 +57,6 @@ HP = zeros(width/tw, height/tw);
 SPD = zeros(width/tw, height/tw);
 type1 = zeros(width/tw, height/tw);
 type2 = zeros(width/tw, height/tw);
-micromon = zeros(width/tw, height/tw);
 
 % This is then split between HP, SPD, DEF and ATK
 max_stat = 255;
@@ -79,7 +78,7 @@ clear totstat max_stat
 type1 = floor(rand(width/tw, height/tw)*18);
 type2 = floor(rand(width/tw, height/tw)*18).*(rand(width/tw, height/tw)<=0.25);
 
-for iter = 1:40
+for iter = 1:2000
     
     
     % Lengthy comparisons coming up...
@@ -250,7 +249,7 @@ for iter = 1:40
     colormap(cmap)
     set(gca,'visible','off');
     
-    data = histcounts(type1(:), length(cmap));
+    [data, edges] = histcounts(type1(:), 1:19);
     subplot(1,2,2)
     hold on
     for d = 1:length(data)
@@ -258,12 +257,13 @@ for iter = 1:40
     end
     hold off
     
-    truesize(figure(1), [width height])
+    truesize(figure(1), [height width])
+    axis([0.5, 18.5, 0, width.*height./(tw.*tw)])
     drawnow()
     
     % gif writing
     % straight outta documentation
-    %{
+   
     frame = getframe(1);
     im = frame2im(frame);
     [A, map] = rgb2ind(im, cmap);
@@ -272,7 +272,7 @@ for iter = 1:40
     else
         imwrite(A,map,file_nm,'gif','WriteMode','append','DelayTime',1/60);
     end
-    %}
+    
     
 end
 
