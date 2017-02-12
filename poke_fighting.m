@@ -6,20 +6,31 @@
 %   - Distribute pokemon stats in an array
 %   - Loop over arrays, making logic decisions and drawing
 
-
-% Current flaws/things to work on: 
-%   - Speed has no affect on the iteration through the array
-%       Instead we should make it affect who goes first in 'battle'
-%   - No health is gained/absorbed, things just get weaker
+%% Current flaws/things to work on: 
+% 
+%   - The fastest pokemon hits the other, that is the end of the round
+%       quite possible some pokemon will just get whaled on and never
+%       get a chance to attack anyone, no 'call and response' battling
 %   - ATK and DEF are constant always right now
 %   - How do we deal with pokemon becoming large blobs?
+%       Currently the large blobs never get BETTER stats, they just get
+%       multiple clones of themselves over the course of ages
+%   - Types are not used in battle apart from "friend or foe"
+%   - In simulation there are small island dots that never change
+%       Need to debug this area of code
+%
+
+%% Code
 width = 600;
 height = 600;
-tw = 60;
+tw = 3;
 
-types = ['Normal', 'Fire', 'Water', 'Electric', 'Grass', 'Ice', ...
-    'Fighting', 'Poison', 'Ground', 'Flying', 'Psychic', 'Bug', 'Rock', ...
-    'Ghost', 'Dragon', 'Dark', 'Steel', 'Fairy'];
+%{
+types = ['Normal'; 'Fire'; 'Water'; 'Electric'; 'Grass'; 'Ice'; ...
+    'Fighting'; 'Poison'; 'Ground'; 'Flying'; 'Psychic'; 'Bug'; 'Rock'; ...
+    'Ghost'; 'Dragon'; 'Dark'; 'Steel'; 'Fairy';];
+%}
+
 cmap = 1/255.*[200,200,200;     % Normal
     255,0,0;                    % Fire
     0,0,255;                    % Water
@@ -73,8 +84,8 @@ clear totstat max_stat
 type1 = floor(rand(width/tw, height/tw)*18);
 type2 = floor(rand(width/tw, height/tw)*18).*(rand(width/tw, height/tw)<=0.25);
 
-for iter = 1:10
-    image(1:width/tw, 1:height/tw, health)
+for iter = 1:2000
+    image(1:width/tw, 1:height/tw, type1)
     colormap(cmap)
     
     % Lengthy comparisons coming up...
@@ -92,17 +103,73 @@ for iter = 1:10
                 % Subtract 1 from fight[i,j] to get above/below modifier
                 movement = j + fight(i,j) - 1;
                 if (1 <= movement && movement <= height/tw)
-                   % FIGHT 
-                   if attack(i,j) > defense(i, movement)
-                      health(i, movement) = health(i, movement) - attack(i,j);
-                   elseif attack(i,movement) > defense(i, j)
+                   % Pokemon has a neighbour to fight?
+                   if type1(i,j) == type1(i,movement)
+                       continue
+                   % Quickest pokemon attacks IF they can
+                   elseif speed(i,j) > speed(i, movement) && ...
+                           defense(i, movement) < attack(i,j)
+                       health(i, movement) = health(i, movement) - attack(i,j);
+                   elseif speed(i,j) < speed(i, movement) && ...
+                           defense(i, j) < attack(i,movement)
                        health(i, j) = health(i, j) - attack(i,movement);
                    end
+                   
+                   % Absorb the opponents stats if opponent died
+                   % Stats are the same between two pixels, like pokemon
+                   % 'grew' from this battle
+                   if health(i,j) < 0
+                      speed(i,j) = speed(i, movement);
+                      health(i,j) = health(i, movement);
+                      attack(i,j) = attack(i, movement);
+                      defense(i,j) = defense(i,movement);
+                      type1(i,j) = type1(i, movement);
+                      type2(i,j) = type2(i, movement);
+                   elseif health(i, movement) < 0
+                      speed(i, movement) = speed(i,j);
+                      health(i, movement) = health(i,j);
+                      attack(i, movement) = attack(i,j); 
+                      defense(i,movement) = defense(i,j);
+                      type1(i, movement) = type1(i,j); 
+                      type2(i, movement) = type2(i,j);
+                   end
+                   
                 end
             else
                 % Subtract 2 from fight[i,j] to get L/R modifier
-                if (1 <= j + fight(i,j) - 2 <= width/tw)
-                   % FIGHT 
+                movement = i + fight(i,j) - 2;
+                if (1 <= movement && movement <= width/tw)
+                   % Pokemon has a neighbour to fight?
+                   if type1(i,j) == type1(movement,j)
+                       continue
+                   % Quickest pokemon attacks IF they can
+                   elseif speed(i,j) > speed(movement, j) && ...
+                           defense(movement, j) < attack(i,j)
+                       health(movement, j) = health(movement, j) - attack(i,j);
+                   elseif speed(i,j) < speed(movement, j) && ...
+                           defense(i, j) < attack(movement,j)
+                       health(i, j) = health(i, j) - attack(movement,j);
+                   end
+                   
+                   % Absorb the opponents stats if opponent died
+                   % Stats are the same between two pixels, like pokemon
+                   % 'grew' from this battle
+                   if health(i,j) < 0
+                      speed(i,j) = speed(movement, j);
+                      health(i,j) = health(movement, j);
+                      attack(i,j) = attack(movement, j);
+                      defense(i,j) = defense(movement,j);
+                      type1(i,j) = type1(movement, j);
+                      type2(i,j) = type2(movement, j);
+                   elseif health(movement, j) < 0
+                      speed(movement, j) = speed(i,j);
+                      health(movement, j) = health(i,j);
+                      attack(movement, j) = attack(i,j); 
+                      defense(movement,j) = defense(i,j);
+                      type1(movement, j) = type1(i,j); 
+                      type2(movement, j) = type2(i,j);
+                   end
+                   
                 end
             end
             
@@ -114,7 +181,7 @@ for iter = 1:10
     % are actively fighting, thus avoiding the middles of large pokemon
     
     %% Screen delay so progression is visible
-    pause(0.1)
+    pause(0.0001)
     
 end
 
